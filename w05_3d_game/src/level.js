@@ -6,6 +6,7 @@ import { cameraModel, createAnomaly } from './anomalies.js';
 import { emit } from './team/bus.js';
 import { EVENT } from './team/contract.js';
 import { extraColliders, createSceneExtra } from './team/m1.js';
+import { createClassmate, createEyes } from './team/m2.js';
 import { extraProps, isFlickerDark, tick as tickRoom } from './team/p3.js';
 
 const FOG = 0x07080c;
