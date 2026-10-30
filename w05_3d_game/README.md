@@ -90,7 +90,20 @@ w05_3d_game/
 
 场景现在用程序化几何体。把模型放进 `assets/models/` 后，可以在 `level.js` 里按同样的位置换上去。
 
-## 工具
+## M1 教室模型分支
+
+`feat/m1-classroom-glb-collision` 在不改动 `original-game` 分支的前提下加入了 `assets/models/classroom_m1_v01.glb`。模型包含教室墙体、门框、黑板、窗帘、课桌椅和灯具；程序化的水平碰撞盒继续保留，避免视觉模型替换后玩家穿模。
+
+运行时由 `src/level.js` 使用本地 `vendor/GLTFLoader.js` 加载 GLB。加载失败会回退到程序化教室。模型使用 `noRay` 标记，不会挡住异常拍照射线；动态门、角色和异常仍由原游戏逻辑控制。
+
+调试碰撞体积：
+
+```text
+http://127.0.0.1:5173/?debug
+```
+
+在右上角开启碰撞框后，应检查墙、门、桌椅和教师桌的绿色水平碰撞盒。原始程序化版本保存在 Git 分支 `original-game`，新接入版本保存在 `feat/m1-classroom-glb-collision`。
+
 
 - `server.js`：本地静态服务器，保证 ES Module 能加载
 - [Three.js r170](https://threejs.org/)：`vendor/three.module.js`，MIT

@@ -7,7 +7,7 @@ import { emit } from './team/bus.js';
 import { EVENT } from './team/contract.js';
 import { extraColliders, createSceneExtra } from './team/m1.js';
 import { createClassmate, createEyes } from './team/m2.js';
-import { extraProps, isFlickerDark, tick as tickRoom } from './team/p3.js';
+import { GLTFLoader } from '../vendor/GLTFLoader.js';
 
 const FOG = 0x07080c;
 
@@ -32,13 +32,18 @@ export class Level {
     this.debugColliders = false;
     this.debugGroup = null;
     this._debugDoor = null;
+    this.roomVisuals = [];
+    this.classroomModel = null;
+    this.classroomModelError = null;
 
     scene.background = new THREE.Color(FOG);
     scene.fog = new THREE.FogExp2(FOG, CONFIG.fogMenu);
 
     this.materials = makeMaterials();
+    this.captureRoomVisuals = true;
     this.buildShell();
     this.buildFurniture();
+    this.captureRoomVisuals = false;
     this.buildDoor();
     this.buildCharacters();
     this.buildPickup();
@@ -47,6 +52,27 @@ export class Level {
     this.buildLights();
     const extra = createSceneExtra(THREE, LAYOUT);
     if (extra) this.scene.add(extra);
+    this.loadClassroomModel();
+  }
+
+  loadClassroomModel() {
+    const loader = new GLTFLoader();
+    loader.load('/assets/models/classroom_m1_v01.glb', (gltf) => {
+      const model = gltf.scene;
+      model.name = 'Classroom_M1_GLTF';
+      model.traverse((node) => {
+        if (!node.isMesh) return;
+        node.castShadow = false;
+        node.receiveShadow = true;
+        node.userData.noRay = true;
+      });
+      this.scene.add(model);
+      this.classroomModel = model;
+      for (const mesh of this.roomVisuals) mesh.visible = false;
+    }, undefined, (error) => {
+      this.classroomModelError = error;
+      console.warn('教室 GLB 加载失败，继续使用程序化教室。', error);
+    });
   }
 
   reset() {
@@ -680,6 +706,9 @@ export class Level {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
+    if (this.captureRoomVisuals && Math.abs(x) <= 10.15 && Math.abs(z) <= 6.15 && w <= 20.4 && d <= 12.4) {
+      this.roomVisuals.push(mesh);
+    }
     if (collider) {
       this.staticColliders.push({
         minX: x - w / 2,
