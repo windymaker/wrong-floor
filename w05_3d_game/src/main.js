@@ -87,7 +87,14 @@ try {
   }
   frame();
 } catch (error) {
-  console.error(error);
+  console.error('Wrong Floor boot error:', error);
   bootError.classList.remove('hidden');
-  bootError.textContent = '这个浏览器打不开 WebGL，换 Chrome 或 Edge 再试。';
+  const message = error instanceof Error ? error.message : String(error);
+  bootError.innerHTML = `<span>游戏启动失败：${escapeHtml(message)}<br><br>如果这是 WebGL 问题，请尝试 Chrome 或 Edge；如果是模块/资源问题，请确认使用 <code>http://127.0.0.1:5173/</code> 而不是直接打开 index.html。</span>`;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[char]));
 }
