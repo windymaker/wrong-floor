@@ -7,7 +7,6 @@ import { emit } from './team/bus.js';
 import { EVENT } from './team/contract.js';
 import { extraColliders, createSceneExtra } from './team/m1.js';
 import { createClassmate, createEyes } from './team/m2.js';
-import { GLTFLoader } from '../vendor/GLTFLoader.js';
 
 const FOG = 0x07080c;
 
@@ -56,22 +55,27 @@ export class Level {
   }
 
   loadClassroomModel() {
-    const loader = new GLTFLoader();
-    loader.load('/assets/models/classroom_m1_v01.glb', (gltf) => {
-      const model = gltf.scene;
-      model.name = 'Classroom_M1_GLTF';
-      model.traverse((node) => {
-        if (!node.isMesh) return;
-        node.castShadow = false;
-        node.receiveShadow = true;
-        node.userData.noRay = true;
+    import('../vendor/GLTFLoader.js').then(({ GLTFLoader }) => {
+      const loader = new GLTFLoader();
+      loader.load('/assets/models/classroom_m1_v01.glb', (gltf) => {
+        const model = gltf.scene;
+        model.name = 'Classroom_M1_GLTF';
+        model.traverse((node) => {
+          if (!node.isMesh) return;
+          node.castShadow = false;
+          node.receiveShadow = true;
+          node.userData.noRay = true;
+        });
+        this.scene.add(model);
+        this.classroomModel = model;
+        for (const mesh of this.roomVisuals) mesh.visible = false;
+      }, undefined, (error) => {
+        this.classroomModelError = error;
+        console.warn('教室 GLB 加载失败，继续使用程序化教室。', error);
       });
-      this.scene.add(model);
-      this.classroomModel = model;
-      for (const mesh of this.roomVisuals) mesh.visible = false;
-    }, undefined, (error) => {
+    }).catch((error) => {
       this.classroomModelError = error;
-      console.warn('教室 GLB 加载失败，继续使用程序化教室。', error);
+      console.warn('教室 GLB 模块加载失败，继续使用程序化教室。', error);
     });
   }
 
