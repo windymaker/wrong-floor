@@ -71,7 +71,8 @@ try {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
   });
 
-  const dev = import.meta.env == null || import.meta.env.DEV;
+  // 打包成单文件时没有 import.meta，所以用运行时开关代替构建期判断。
+  const dev = globalThis.__WF_DEV__ !== false;
   if (dev) {
     window.__game = {
       game,

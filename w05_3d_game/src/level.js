@@ -56,7 +56,7 @@ export class Level {
   loadClassroomModel() {
     import('../vendor/GLTFLoader.js').then(({ GLTFLoader }) => {
       const loader = new GLTFLoader();
-      loader.load('/assets/models/classroom_m1_v01.glb', (gltf) => {
+      const onLoaded = (gltf) => {
         const model = gltf.scene;
         model.name = 'Classroom_M1_GLTF';
         model.traverse((node) => {
@@ -78,11 +78,28 @@ export class Level {
         // 模型材质第一次进入视野才编译着色器，会造成一次明显卡顿（转视角时最明显）。
         // 交给上层立刻预编译。
         this.onSceneChanged?.();
-      }, undefined, (error) => {
+      };
+      const onFailed = (error) => {
         this.classroomModelError = error;
         document.body.dataset.classroomModel = 'fallback';
         console.warn('教室 GLB 加载失败，继续使用程序化教室。', error);
-      });
+      };
+
+      // 单文件版把模型以 base64 内嵌，file:// 下无法 fetch，只能走 parse。
+      const embedded = globalThis.__WF_CLASSROOM_GLB__;
+      if (typeof embedded === 'string' && embedded.length > 0) {
+        try {
+          const binary = atob(embedded);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          loader.parse(bytes.buffer, '', onLoaded, onFailed);
+        } catch (error) {
+          onFailed(error);
+        }
+        return;
+      }
+
+      loader.load('/assets/models/classroom_m1_v01.glb', onLoaded, undefined, onFailed);
     }).catch((error) => {
       this.classroomModelError = error;
       document.body.dataset.classroomModel = 'fallback';
