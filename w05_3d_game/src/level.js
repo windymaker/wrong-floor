@@ -73,6 +73,9 @@ export class Level {
           mesh.traverse((child) => { child.userData.noRay = true; });
         }
         document.body.dataset.classroomModel = 'glb';
+        // 模型材质第一次进入视野才编译着色器，会造成一次明显卡顿（转视角时最明显）。
+        // 交给上层立刻预编译。
+        this.onSceneChanged?.();
       }, undefined, (error) => {
         this.classroomModelError = error;
         document.body.dataset.classroomModel = 'fallback';
@@ -147,13 +150,17 @@ export class Level {
   }
 
   spawnUpTo(count) {
+    let added = false;
     for (let level = 1; level <= count; level += 1) {
       if (this.anomalies.some((item) => item.level === level)) continue;
       const anomaly = createAnomaly(level);
       if (anomaly.parent === 'door') this.doorPivot.add(anomaly.group);
       else this.scene.add(anomaly.group);
       this.anomalies.push(anomaly);
+      added = true;
     }
+    // 新异常带着新材质，先让渲染器编译，避免玩家第一次看到它时掉帧。
+    if (added) this.onSceneChanged?.();
   }
 
   clearAnomalies() {
@@ -689,7 +696,9 @@ export class Level {
     this.doorLight = new THREE.PointLight(0xffc59a, CONFIG.doorLight, 8, 2);
     this.doorLight.position.set(0, 2.15, LAYOUT.room.maxZ + 0.45);
     this.scene.add(this.doorLight);
-    for (let x = LAYOUT.hall.minX + 5; x <= LAYOUT.hall.maxX - 5; x += 5) {
+    // 走廊 106 米长，雾的可见距离只有十几米，5 米一盏等于让每帧多算一倍光照。
+    // 改成 10 米一盏，近处观感几乎不变，片元光照循环少一半。
+    for (let x = LAYOUT.hall.minX + 10; x <= LAYOUT.hall.maxX - 5; x += 10) {
       const lamp = new THREE.PointLight(0x8ea0c0, CONFIG.hallLamp, 14, 2);
       lamp.position.set(x, 2.55, LAYOUT.hall.z);
       this.scene.add(lamp);

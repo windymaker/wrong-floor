@@ -35,6 +35,24 @@ try {
   bindPlayerInput(player, canvas);
   const game = new Game({ scene, camera, canvas, hud, audio, level, player });
 
+  // 材质第一次进入视锥才编译着色器，会在转视角时造成一次卡顿。
+  // 场景一有变化就主动编译一次，把开销提前到加载阶段。
+  let compileQueued = false;
+  const requestCompile = () => {
+    if (compileQueued) return;
+    compileQueued = true;
+    requestAnimationFrame(() => {
+      compileQueued = false;
+      try {
+        renderer.compile(scene, camera);
+      } catch (error) {
+        console.warn('着色器预编译失败', error);
+      }
+    });
+  };
+  level.onSceneChanged = requestCompile;
+  requestCompile();
+
   hud.bind({
     onStart: () => game.start(false),
     onDemo: () => game.startDemo(),

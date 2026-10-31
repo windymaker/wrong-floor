@@ -101,8 +101,17 @@ export class Player {
 
   pointerLook(dx, dy) {
     if (this.scripted || this.lookTarget || !this.controlEnabled) return;
-    this.pendingDX += dx;
-    this.pendingDY += dy;
+    // 指针锁定切换、浏览器丢帧时会出现几百像素的异常 movementX，
+    // 直接累加会让视角瞬移，这里按单次事件上限截断。
+    const limit = 140;
+    this.pendingDX += Math.max(-limit, Math.min(limit, dx));
+    this.pendingDY += Math.max(-limit, Math.min(limit, dy));
+  }
+
+  /** 重新锁定指针时丢弃残留的鼠标增量，避免恢复瞬间甩视角。 */
+  clearPendingLook() {
+    this.pendingDX = 0;
+    this.pendingDY = 0;
   }
 
   queueInteract() {
@@ -370,6 +379,10 @@ export function bindPlayerInput(player, canvas) {
   });
   window.addEventListener('pointerup', () => {
     dragLook = false;
+  });
+  // 锁定状态切换时浏览器可能补发一大段 movement，先清空再继续。
+  document.addEventListener('pointerlockchange', () => {
+    player.clearPendingLook();
   });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 }
