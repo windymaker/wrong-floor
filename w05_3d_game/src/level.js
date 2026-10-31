@@ -32,7 +32,7 @@ export class Level {
     this.debugColliders = false;
     this.debugGroup = null;
     this._debugDoor = null;
-    this.roomVisuals = [];
+    this.furnitureVisuals = [];
     this.classroomModel = null;
     this.classroomModelError = null;
 
@@ -40,10 +40,8 @@ export class Level {
     scene.fog = new THREE.FogExp2(FOG, CONFIG.fogMenu);
 
     this.materials = makeMaterials();
-    this.captureRoomVisuals = true;
     this.buildShell();
     this.buildFurniture();
-    this.captureRoomVisuals = false;
     this.buildDoor();
     this.buildCharacters();
     this.buildPickup();
@@ -69,13 +67,20 @@ export class Level {
         });
         this.scene.add(model);
         this.classroomModel = model;
-        for (const mesh of this.roomVisuals) mesh.visible = false;
+        for (const mesh of this.furnitureVisuals) {
+          mesh.visible = false;
+          // 隐藏的旧家具不能被拍照射线命中，否则会出现“看不见的桌子挡住拍摄”。
+          mesh.traverse((child) => { child.userData.noRay = true; });
+        }
+        document.body.dataset.classroomModel = 'glb';
       }, undefined, (error) => {
         this.classroomModelError = error;
+        document.body.dataset.classroomModel = 'fallback';
         console.warn('教室 GLB 加载失败，继续使用程序化教室。', error);
       });
     }).catch((error) => {
       this.classroomModelError = error;
+      document.body.dataset.classroomModel = 'fallback';
       console.warn('教室 GLB 模块加载失败，继续使用程序化教室。', error);
     });
   }
@@ -516,10 +521,12 @@ export class Level {
     for (const x of desks.towardBoard) {
       for (const z of desks.across) this.addDesk(x, z);
     }
-    this.addBox(0.72, 0.78, 1.7, 8.2, 0.39, 0, this.materials.desk, true);
+    const teacherDesk = this.addBox(0.72, 0.78, 1.7, 8.2, 0.39, 0, this.materials.desk, true);
+    this.furnitureVisuals.push(teacherDesk);
     const boardX = room.maxX - 0.07;
     const board = this.addBox(0.08, 1.45, 4.2, boardX, 1.75, 0, this.materials.board, false);
     const frame = this.addBox(0.06, 1.7, 4.5, boardX + 0.05, 1.75, 0, this.materials.trim, false);
+    this.furnitureVisuals.push(board, frame);
     markNoRay(board);
     markNoRay(frame);
 
@@ -544,7 +551,7 @@ export class Level {
 
   addDesk(x, z) {
     const { topW, topD, topH } = LAYOUT.desks;
-    this.addBox(topD, topH, topW, x, topH / 2, z, this.materials.desk, true);
+    this.furnitureVisuals.push(this.addBox(topD, topH, topW, x, topH / 2, z, this.materials.desk, true));
     const chair = new THREE.Group();
     const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), this.materials.chair);
     seat.position.y = 0.46;
@@ -555,6 +562,7 @@ export class Level {
     chair.position.set(x - 0.48, 0, z);
     markNoRay(chair);
     this.scene.add(chair);
+    this.furnitureVisuals.push(chair);
   }
 
   buildDoor() {
@@ -711,9 +719,6 @@ export class Level {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
-    if (this.captureRoomVisuals && Math.abs(x) <= 10.15 && Math.abs(z) <= 6.15 && w <= 20.4 && d <= 12.4) {
-      this.roomVisuals.push(mesh);
-    }
     if (collider) {
       this.staticColliders.push({
         minX: x - w / 2,
