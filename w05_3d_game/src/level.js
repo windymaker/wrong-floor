@@ -73,6 +73,8 @@ export class Level {
           mesh.traverse((child) => { child.userData.noRay = true; });
         }
         document.body.dataset.classroomModel = 'glb';
+        document.body.dataset.furnitureHidden = String(this.furnitureVisuals.filter((m) => !m.visible).length)
+          + '/' + String(this.furnitureVisuals.length);
         // 模型材质第一次进入视野才编译着色器，会造成一次明显卡顿（转视角时最明显）。
         // 交给上层立刻预编译。
         this.onSceneChanged?.();
@@ -499,25 +501,134 @@ export class Level {
       this.addBox(pier, winTop - sill, t, cursor + pier / 2, (sill + winTop) / 2, northZ, wall, false);
       cursor += pier;
       const center = cursor + winW / 2;
-      this.addWindowGlass(center, (sill + winTop) / 2, winW - 0.08, winTop - sill - 0.08, northZ);
-      this.addCurtain(center);
+      this.windowIndex = (this.windowIndex || 0) + 1;
+      const broken = this.windowIndex === 2 || this.windowIndex === 5;
+      this.addWindow(center, (sill + winTop) / 2, winW, winTop - sill, northZ, sill, winTop, broken);
+      this.addCurtain(center, broken);
       cursor += winW;
     }
     this.addBox(pier, winTop - sill, t, cursor + pier / 2, (sill + winTop) / 2, northZ, wall, false);
   }
 
-  addWindowGlass(x, y, w, h, z) {
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.materials.glass);
-    glass.position.set(x, y, z);
+  /**
+   * 一扇窗：窗框、横竖分格、窗台、插销，其中第 2、5 扇是破的。
+   * 破窗用锯齿形黑片当缺口（外面本来就是黑的），再叠裂纹和几块挂着的碎玻璃。
+   */
+  addWindow(centerX, centerY, w, h, z, sillY, topY, broken) {
+    const innerW = w - 0.10;
+    const innerH = h - 0.10;
+    const faceZ = z - 0.06;      // 朝教室这一侧
+    const trim = this.materials.trim;
+
+    // 玻璃
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(innerW, innerH), this.materials.glass);
+    glass.position.set(centerX, centerY, z - 0.02);
     markNoRay(glass);
     this.scene.add(glass);
+
+    // 外框四条
+    const bar = 0.055;
+    const frameZ = z - 0.05;
+    this.addBox(innerW + bar * 2, bar, 0.07, centerX, topY - 0.05, frameZ, trim, false);
+    this.addBox(innerW + bar * 2, bar, 0.07, centerX, sillY + 0.05, frameZ, trim, false);
+    this.addBox(bar, innerH + bar * 2, 0.07, centerX - innerW / 2 - bar / 2, centerY, frameZ, trim, false);
+    this.addBox(bar, innerH + bar * 2, 0.07, centerX + innerW / 2 + bar / 2, centerY, frameZ, trim, false);
+    // 中竖梃 + 上横档，做出四格
+    this.addBox(0.038, innerH, 0.055, centerX, centerY, frameZ, trim, false);
+    this.addBox(innerW, 0.032, 0.055, centerX, centerY + innerH * 0.18, frameZ, trim, false);
+    // 窗台
+    this.addBox(innerW + 0.30, 0.06, 0.26, centerX, sillY - 0.02, z - 0.16, trim, false);
+    // 插销
+    this.addBox(0.05, 0.018, 0.02, centerX + 0.02, centerY - 0.02, frameZ - 0.03, trim, false);
+
+    if (!broken) return;
+
+    // 缺口：锯齿黑片
+    const holeRng = seededRandom(centerX * 13.7 + 3.1);
+    const holeW = innerW * (0.42 + holeRng() * 0.16);
+    const holeH = innerH * (0.5 + holeRng() * 0.2);
+    const cx = centerX + (holeRng() - 0.5) * (innerW - holeW) * 0.7;
+    const cy = centerY + (holeRng() - 0.5) * (innerH - holeH) * 0.6;
+    const shape = new THREE.Shape();
+    const points = 9;
+    for (let i = 0; i < points; i += 1) {
+      const angle = (i / points) * Math.PI * 2;
+      const radius = 0.5 + (holeRng() - 0.5) * 0.34;
+      const px = cx + Math.cos(angle) * (holeW / 2) * radius;
+      const py = cy + Math.sin(angle) * (holeH / 2) * radius;
+      if (i === 0) shape.moveTo(px, py);
+      else shape.lineTo(px, py);
+    }
+    shape.closePath();
+    const hole = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({
+      color: 0x000000, side: THREE.DoubleSide,
+    }));
+    hole.position.z = faceZ + 0.005;
+    markNoRay(hole);
+    this.scene.add(hole);
+
+    // 从缺口向外爬的裂纹
+    const cracks = [];
+    for (let i = 0; i < 5; i += 1) {
+      const angle = holeRng() * Math.PI * 2;
+      const len = 0.35 + holeRng() * 0.85;
+      const sx = cx + Math.cos(angle) * holeW * 0.5;
+      const sy = cy + Math.sin(angle) * holeH * 0.5;
+      let px = sx;
+      let py = sy;
+      let a = angle;
+      for (let seg = 0; seg < 3; seg += 1) {
+        a += (holeRng() - 0.5) * 0.7;
+        const step = len / 3;
+        const nx = px + Math.cos(a) * step;
+        const ny = py + Math.sin(a) * step;
+        cracks.push(px, py, 0.002, nx, ny, 0.002);
+        px = nx;
+        py = ny;
+      }
+    }
+    const crackGeo = new THREE.BufferGeometry();
+    crackGeo.setAttribute('position', new THREE.Float32BufferAttribute(cracks, 3));
+    const crackLines = new THREE.LineSegments(crackGeo, new THREE.LineBasicMaterial({
+      color: 0xbfc9c4, transparent: true, opacity: 0.45,
+    }));
+    crackLines.position.z = faceZ + 0.008;
+    markNoRay(crackLines);
+    this.scene.add(crackLines);
+
+    // 还挂着没掉的碎玻璃
+    for (let i = 0; i < 3; i += 1) {
+      const shardRng = seededRandom(i * 31.7 + centerX);
+      const wS = 0.10 + shardRng() * 0.16;
+      const hS = 0.08 + shardRng() * 0.14;
+      const tri = new THREE.Shape();
+      tri.moveTo(0, 0);
+      tri.lineTo(wS, -hS * 0.3);
+      tri.lineTo(wS * 0.35, hS);
+      tri.closePath();
+      const shard = new THREE.Mesh(new THREE.ShapeGeometry(tri), this.materials.glass);
+      shard.position.set(
+        cx + (shardRng() - 0.5) * innerW * 0.8,
+        cy + (shardRng() - 0.5) * innerH * 0.8,
+        faceZ + 0.01,
+      );
+      shard.rotation.z = shardRng() * Math.PI;
+      markNoRay(shard);
+      this.scene.add(shard);
+    }
   }
 
-  addCurtain(x) {
+  addCurtain(x, broken = false) {
     const { room } = LAYOUT;
     const z = room.maxZ - 0.05;
     for (const side of [-0.55, 0.55]) {
-      const curtain = this.addBox(0.72, 2.6, 0.04, x + side, 1.42, z, this.materials.curtain, false);
+      // 破窗那一扇的右半幅已经撕掉了，只剩贴着窗框的一小条
+      const torn = broken && side > 0;
+      const w = torn ? 0.26 : 0.72;
+      const h = torn ? 1.05 : 2.6;
+      const y = torn ? 2.42 : 1.42;
+      const offset = torn ? side * 0.72 : side;
+      const curtain = this.addBox(w, h, 0.04, x + offset, y, z, this.materials.curtain, false);
       markNoRay(curtain);
       this.curtains.push(curtain);
     }
@@ -947,6 +1058,15 @@ function markNoRay(object) {
   object.traverse((child) => {
     child.userData.noRay = true;
   });
+}
+
+/** 固定种子的伪随机，让破窗形状每次运行都一样。 */
+function seededRandom(seed) {
+  let s = Math.floor(Math.abs(seed) * 1000) >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
 }
 
 function flagged(object, key) {

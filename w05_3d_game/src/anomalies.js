@@ -165,47 +165,82 @@ function createBoard() {
   const total = widths.reduce((a, b) => a + b, 0);
   let cursor = 512 - total / 2;
 
+  // 每个字各自的旋转、缩放、上下漂移：基线不平，大小不匀
+  const glyphs = [...text].map((ch, i) => ({
+    ch,
+    size: 88 * (0.82 + rand() * 0.34),
+    rot: (rand() - 0.5) * 0.34,
+    dx: (rand() - 0.5) * 18,
+    dy: (rand() - 0.5) * 32,
+    weight: 0.6 + rand() * 0.4,
+    x: 0,
+  }));
+  let drift = 0;
+  for (let i = 0; i < glyphs.length; i += 1) {
+    glyphs[i].x = cursor + widths[i] / 2;
+    cursor += widths[i];
+    drift += (rand() - 0.5) * 7;
+    glyphs[i].dy += drift;
+  }
+
   // 先垫一层暗红晕，让字像是从血里浮出来
   ctx.globalAlpha = 0.45;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    const size = 88 * (0.94 + rand() * 0.12);
+  for (const g of glyphs) {
     ctx.save();
-    ctx.translate(cursor + widths[i] / 2 + (rand() - 0.5) * 5, baseY + (rand() - 0.5) * 9);
-    ctx.rotate((rand() - 0.5) * 0.075);
-    ctx.font = fontOf(size);
+    ctx.translate(g.x + g.dx + 2, baseY + g.dy + 3);
+    ctx.rotate(g.rot);
+    ctx.font = fontOf(g.size);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(96,10,14,0.85)';
-    ctx.fillText(ch, 1.5, 2.5);
+    ctx.fillText(g.ch, 2, 3);
     ctx.restore();
-    cursor += widths[i];
   }
   ctx.globalAlpha = 1;
 
-  // 主笔画：粉笔白，逐个字抖动，粗细靠重复描边模拟
-  cursor = 512 - total / 2;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    const size = 88 * (0.94 + rand() * 0.12);
-    const jx = (rand() - 0.5) * 5;
-    const jy = (rand() - 0.5) * 9;
-    const rot = (rand() - 0.5) * 0.075;
+  // 主笔画：粉笔白，笔画粗细不匀
+  for (const g of glyphs) {
     ctx.save();
-    ctx.translate(cursor + widths[i] / 2 + jx, baseY + jy);
-    ctx.rotate(rot);
-    ctx.font = fontOf(size);
+    ctx.translate(g.x + g.dx, baseY + g.dy);
+    ctx.rotate(g.rot);
+    ctx.font = fontOf(g.size);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // 每一笔描三遍，边缘发毛、深浅不一
-    ctx.fillStyle = 'rgba(232,226,210,0.55)';
-    ctx.fillText(ch, -1.2, 1.2);
-    ctx.fillStyle = 'rgba(228,222,204,0.72)';
-    ctx.fillText(ch, 0.9, -0.9);
-    ctx.fillStyle = 'rgba(238,233,220,0.9)';
-    ctx.fillText(ch, 0, 0);
+    ctx.globalAlpha = 0.5 * g.weight;
+    ctx.fillStyle = 'rgba(232,226,210,1)';
+    ctx.fillText(g.ch, -1.6, 1.6);
+    ctx.globalAlpha = 0.7 * g.weight;
+    ctx.fillStyle = 'rgba(228,222,204,1)';
+    ctx.fillText(g.ch, 1.2, -1.1);
+    ctx.globalAlpha = 0.92 * g.weight;
+    ctx.fillStyle = 'rgba(238,233,220,1)';
+    ctx.fillText(g.ch, 0, 0);
     ctx.restore();
-    cursor += widths[i];
+  }
+  ctx.globalAlpha = 1;
+
+  // 有两个字被袖子抹开了一半：不是挖空，是糊上一层粉笔灰
+  for (const g of glyphs) {
+    if (g.ch !== '把' && g.ch !== '了') continue;
+    ctx.save();
+    ctx.translate(g.x + g.dx, baseY + g.dy);
+    ctx.rotate(g.rot + 0.16);
+    for (let i = 0; i < 4; i += 1) {
+      ctx.globalAlpha = 0.10 + i * 0.03;
+      ctx.fillStyle = '#ded9c8';
+      ctx.fillRect(-g.size * 0.34 + i * 6, -g.size * 0.26 + i * 9, g.size * 0.62, 7 + i * 3);
+    }
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = 'rgba(20,28,23,0.55)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(-g.size * 0.3, -g.size * 0.2 + i * 26);
+      ctx.lineTo(g.size * 0.3, -g.size * 0.24 + i * 26);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   // 血迹：从字里往下淌

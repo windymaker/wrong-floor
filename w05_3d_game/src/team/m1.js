@@ -132,6 +132,58 @@ function handTexture(THREE) {
   return texture;
 }
 
+/** 一张踩脏的作业纸：横线 + 污点。 */
+function paperTexture(THREE) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  const rand = mulberry32(31415);
+
+  ctx.fillStyle = '#c9c4b2';
+  ctx.fillRect(0, 0, 128, 180);
+
+  // 纸上的横线
+  ctx.strokeStyle = 'rgba(70,74,80,0.35)';
+  ctx.lineWidth = 1;
+  for (let y = 26; y < 168; y += 14) {
+    ctx.beginPath();
+    ctx.moveTo(14, y);
+    ctx.lineTo(114, y);
+    ctx.stroke();
+  }
+  // 划掉的字迹
+  ctx.strokeStyle = 'rgba(40,42,48,0.55)';
+  ctx.lineWidth = 2.2;
+  for (let i = 0; i < 7; i += 1) {
+    const x = 20 + rand() * 70;
+    const y = 30 + rand() * 120;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 8 + rand() * 14, y + 3);
+    ctx.stroke();
+  }
+  // 脏污和褶皱
+  for (let i = 0; i < 26; i += 1) {
+    ctx.fillStyle = `rgba(58,48,38,${0.05 + rand() * 0.16})`;
+    ctx.beginPath();
+    ctx.arc(rand() * 128, rand() * 180, 3 + rand() * 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(60,54,44,0.25)';
+  ctx.lineWidth = 1.4;
+  for (let i = 0; i < 4; i += 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, rand() * 180);
+    ctx.lineTo(128, rand() * 180);
+    ctx.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** 收集实例矩阵，最后一次性建 InstancedMesh。 */
 function makeBatch(THREE, geometry, material, entries) {
   const mesh = new THREE.InstancedMesh(geometry, material, entries.length);
@@ -298,9 +350,66 @@ export function createSceneExtra(THREE, LAYOUT) {
     }), hands));
   }
 
-  const total = stains.length + deskStains.length + scratches.length + hands.length;
+  // 4) 天花板上垂下来的破布条
+  const strips = [];
+  guard = 0;
+  while (strips.length < 6 && guard < 300) {
+    guard += 1;
+    const x = room.minX + 1.2 + random() * (room.maxX - room.minX - 2.4);
+    const z = room.minZ + 1.0 + random() * (room.maxZ - room.minZ - 2.0);
+    if (tooClose(x, z, 0.6)) continue;
+    const len = 0.28 + random() * 0.62;
+    strips.push({
+      x,
+      y: 3.16 - len / 2,
+      z,
+      rz: (random() - 0.5) * 0.22,
+      ry: random() * Math.PI,
+      sx: 0.05 + random() * 0.06,
+      sy: len,
+    });
+  }
+
+  // 5) 地上散落的纸
+  const papers = [];
+  guard = 0;
+  while (papers.length < 9 && guard < 300) {
+    guard += 1;
+    const x = room.minX + 0.9 + random() * (room.maxX - room.minX - 1.8);
+    const z = room.minZ + 0.9 + random() * (room.maxZ - room.minZ - 2.2);
+    if (tooClose(x, z, 0.5)) continue;
+    papers.push({
+      x,
+      y: 0.038,
+      z,
+      rx: -Math.PI / 2,
+      rz: random() * Math.PI * 2,
+      sx: 0.19 + random() * 0.06,
+      sy: 0.26 + random() * 0.08,
+    });
+  }
+
+  if (strips.length) {
+    // 布条用竖直的薄盒，绕 Z 轻微倾斜
+    const stripGeo = new THREE.BoxGeometry(1, 1, 0.012);
+    const stripMat = new THREE.MeshStandardMaterial({ color: 0x231f1b, roughness: 0.98 });
+    group.add(makeBatch(THREE, stripGeo, stripMat, strips));
+  }
+
+  if (papers.length) {
+    group.add(makeBatch(THREE, planeGeometry, new THREE.MeshBasicMaterial({
+      map: paperTexture(THREE),
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }), papers));
+  }
+
+  const total = stains.length + deskStains.length + scratches.length + hands.length
+    + strips.length + papers.length;
   document.body.dataset.decor = String(total);
-  console.info(`[M1] room grime: floor ${stains.length} / desk ${deskStains.length} / scratch ${scratches.length} / hand ${hands.length}`);
+  console.info(`[M1] room grime: floor ${stains.length} / desk ${deskStains.length} / scratch ${scratches.length} / hand ${hands.length} / strip ${strips.length} / paper ${papers.length}`);
 
   return group;
 }
